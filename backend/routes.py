@@ -51,3 +51,111 @@ def parse_json(data):
 ######################################################################
 # INSERT CODE HERE
 ######################################################################
+
+@app.route("/health")
+def health():
+    return jsonify(dict(status="OK")), 200
+
+@app.route("/count")
+def count():
+    if songs_list:
+        return {"count" : len(songs_list)}, 200
+
+    return {"message": "Internal server error"}, 500
+
+@app.route("/song", methods=["GET"])
+def get_songs():
+    try:
+        return {"songs": parse_json(list(db.songs.find({})))}, 200
+    except Exception as e:
+        return jsonify({
+            "error": "Internal Server Error",
+            "message": "An unexpected error occurred",
+            "details": str(e)
+        }), 500
+
+@app.route("/song/<int:id>", methods=["GET"])
+def get_song_by_id(id):
+    try:
+        song = db.songs.find_one({"id": id})
+        if not song:
+            return {"message": "song with id not found"}, 404
+        else:
+            return parse_json(song), 200
+    except Exception as e:
+        return jsonify({
+            "error": "Internal Server Error",
+            "message": "An unexpected error occurred",
+            "details": str(e)
+        }), 500
+
+
+@app.route("/song", methods=["POST"])
+def create_song():
+    try:
+        new_song = request.get_json()
+        if not new_song:
+            return {"message": "Invalid input, no data provided"}, 400
+
+        id = new_song['id']
+        old_song = db.songs.find_one({"id": id})
+
+        if not old_song:
+            # Songes not exit.
+            db.songs.insert_one(new_song)
+            return parse_json(new_song), 201
+        else:
+            return jsonify({"Message":f"song with id {old_song['id']} already present"}), 302
+
+    except Exception as e:
+        return jsonify({
+            "error": "Internal Server Error",
+            "message": "An unexpected error occurred",
+            "details": str(e)
+        }), 500
+
+@app.route("/song/<int:id>", methods=["PUT"])
+def update_song(id):
+    try:
+        new_song = request.get_json()
+        if not new_song:
+            return {"message": "Invalid input, no data provided"}, 400
+
+        old_song = db.songs.find_one({"id": id})
+
+        if not old_song:
+            # Song does not exit.
+            return jsonify({"Message":"song not found"}), 302
+        else:
+            update_result = db.songs.update_one({"id": id}, {"$set": new_song}, upsert=False)
+            if update_result.modified_count == 0:
+                return {"message": "song found, but nothing updated"}, 200
+            else:
+                return parse_json(new_song), 200
+            
+
+    except Exception as e:
+        return jsonify({
+            "error": "Internal Server Error",
+            "message": "An unexpected error occurred",
+            "details": str(e)
+        }), 500
+
+
+@app.route("/song/<int:id>", methods=["DELETE"])
+def delete_song(id):
+    try:
+        deleted_count = db.songs.delete_one({"id": id})
+
+        if deleted_count == 0:
+            # Song does not exit.
+            return jsonify({"message":"song not found"}), 404
+        else:
+            return jsonify({}), 204
+
+    except Exception as e:
+        return jsonify({
+            "error": "Internal Server Error",
+            "message": "An unexpected error occurred",
+            "details": str(e)
+        }), 500
